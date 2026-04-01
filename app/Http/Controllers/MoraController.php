@@ -277,18 +277,34 @@ class MoraController extends Controller
     {
         $visibleMonth = $this->resolveVisibleMonth($request, $model);
         $months = max(1, min(3, (int) $request->integer('months', 2)));
-        $saldoPendiente = (float) $model->saldo_pendiente_mora;
-        $fechaInicioMora = $model->fecha_inicio_mora;
+        $creditSummary = null;
+        $calendar = [];
+        $milestones = [];
+
+        if ($model instanceof Venta) {
+            $creditSummary = MoraSupport::saleSummary($model);
+            $calendar = MoraSupport::saleBuildCalendar($model, $visibleMonth, $months);
+            $milestones = MoraSupport::saleMilestoneSchedule($model);
+        } else {
+            $saldoPendiente = (float) $model->saldo_pendiente_mora;
+            $fechaInicioMora = $model->fecha_inicio_mora;
+            $calendar = MoraSupport::buildCalendar($visibleMonth, $months, $fechaInicioMora, $saldoPendiente);
+            $milestones = MoraSupport::milestoneSchedule($fechaInicioMora, $saldoPendiente);
+        }
 
         return [
             'type' => $type,
             'record' => $model,
             'months' => $months,
             'visibleMonth' => $visibleMonth,
-            'calendar' => MoraSupport::buildCalendar($visibleMonth, $months, $fechaInicioMora, $saldoPendiente),
-            'milestones' => MoraSupport::milestoneSchedule($fechaInicioMora, $saldoPendiente),
+            'calendar' => $calendar,
+            'milestones' => $milestones,
             'palette' => MoraSupport::palette($model->mora_semaforo),
             'backRoute' => route('mora.index', ['tab' => $type]),
+            'detailRoute' => $type === 'ventas'
+                ? route('mora.ventas.show', $model)
+                : route('mora.reparaciones.show', $model),
+            'creditSummary' => $creditSummary,
         ];
     }
 
@@ -470,9 +486,19 @@ class MoraController extends Controller
     {
         if ($request->filled('month')) {
             try {
-                return Carbon::createFromFormat('Y-m', $request->string('month')->toString())->startOfMonth();
+                return Carbon::createFromFormat('!Y-m', $request->string('month')->toString())->startOfMonth();
             } catch (\Throwable) {
                 // Fallback below.
+            }
+        }
+
+        if ($model instanceof Venta) {
+            if ($model->fecha_mora_referencia) {
+                return Carbon::parse($model->fecha_mora_referencia)->startOfMonth();
+            }
+
+            if ($model->fecha_venta) {
+                return Carbon::parse($model->fecha_venta)->startOfMonth();
             }
         }
 

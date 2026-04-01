@@ -122,62 +122,210 @@ class MoraSupport
     public static function milestoneSchedule(?CarbonInterface $fechaInicioMora, float $saldoPendiente): array
     {
         $baseDate = $fechaInicioMora ? Carbon::parse($fechaInicioMora)->startOfDay() : null;
-        $diasActuales = self::daysInMora($fechaInicioMora, $saldoPendiente);
 
-        return collect(self::ALERT_MILESTONES)
-            ->map(function (int $day) use ($baseDate, $diasActuales) {
-                return [
-                    'day' => $day,
-                    'label' => match ($day) {
-                        7 => 'Primer aviso',
-                        15 => 'Segundo aviso',
-                        30 => 'Aviso critico',
-                        default => "Dia {$day}",
-                    },
-                    'date' => $baseDate?->copy()->addDays($day),
-                    'reached' => $baseDate ? $diasActuales >= $day : false,
-                ];
-            })
-            ->all();
+        return self::milestoneScheduleFromReferenceDate($baseDate, $saldoPendiente);
     }
 
     public static function buildCalendar(CarbonInterface $visibleMonth, int $months, ?CarbonInterface $fechaInicioMora, float $saldoPendiente): array
     {
-        $calendar = [];
-        $cursor = Carbon::parse($visibleMonth)->startOfMonth();
-        $months = max(1, min(3, $months));
+        $referenceDate = $fechaInicioMora ? Carbon::parse($fechaInicioMora)->startOfDay() : null;
 
-        for ($index = 0; $index < $months; $index++) {
-            $month = $cursor->copy()->addMonths($index);
-            $firstDay = $month->copy()->startOfMonth();
-            $lastDay = $month->copy()->endOfMonth();
-            $days = [];
+        return self::buildCalendarFromReferenceDate(
+            $visibleMonth,
+            $months,
+            $referenceDate,
+            $saldoPendiente,
+            $referenceDate ? [[
+                'date' => $referenceDate,
+                'label' => 'Inicio',
+                'kind' => 'base',
+            ]] : []
+        );
+    }
 
-            for ($blank = 1; $blank < $firstDay->dayOfWeekIso; $blank++) {
-                $days[] = ['blank' => true];
-            }
+    public static function saleCreditBaseDate(Venta $venta): ?Carbon
+    {
+        if ($venta->fecha_inicio_mora) {
+            return Carbon::parse($venta->fecha_inicio_mora)->startOfDay();
+        }
 
-            for ($date = $firstDay->copy(); $date->lte($lastDay); $date->addDay()) {
-                $daySemaphore = self::resolveDaySemaphore($date, $fechaInicioMora, $saldoPendiente);
+        if ($venta->fecha_venta) {
+            return Carbon::parse($venta->fecha_venta)->startOfDay();
+        }
 
-                $days[] = [
-                    'blank' => false,
-                    'date' => $date->copy(),
-                    'is_today' => $date->isToday(),
-                    'is_mora_start' => $fechaInicioMora ? $date->isSameDay($fechaInicioMora) : false,
-                    'semaphore' => $daySemaphore,
-                    'palette' => self::palette($daySemaphore),
+        return null;
+    }
+
+    public static function saleSummary(Venta $venta, ?CarbonInterface $today = null): array
+    {
+        $today = Carbon::parse($today ?? now())->startOfDay();
+        $baseDate = self::saleCreditBaseDate($venta);
+        $commitmentDate = $venta->fecha_compromiso_pago
+            ? Carbon::parse($venta->fecha_compromiso_pago)->startOfDay()
+            : null;
+        $installments = max(0, (int) ($venta->numero_cuotas ?? 0));
+        $termDays = max(0, (int) ($venta->plazo_acordado_dias ?? 0));
+        $saldoPendiente = (float) $venta->saldo_pendiente_mora;
+
+        $installmentAmount = $installments > 0
+            ? round((float) $venta->total / max(1, $installments), 2)
+            : 0.0;
+
+        $coveredInstallments = $installmentAmount > 0
+            ? min($installments, (int) floor((((float) $venta->monto_pagado) + 0.00001) / $installmentAmount))
+            : 0;
+
+        $schedule = [];
+        $currentDueDate = null;
+        $currentInstallmentNumber = null;
+
+        if ($baseDate && $installments > 0) {
+            foreach (range(1, $installments) as $installmentNumber) {
+                $dueDate = self::saleInstallmentDueDate($baseDate, $installmentNumber, $installments, $termDays);
+
+                $schedule[] = [
+                    'number' => $installmentNumber,
+                    'date' => $dueDate,
+                    'is_paid' => $installmentNumber <= $coveredInstallments,
+                    'is_current' => false,
                 ];
             }
 
-            $calendar[] = [
-                'key' => $month->format('Y-m'),
-                'title' => ucfirst($month->translatedFormat('F Y')),
-                'days' => $days,
+            $currentInstallmentNumber = min($installments, max(1, $coveredInstallments + 1));
+            $currentDueDate = $schedule[$currentInstallmentNumber - 1]['date'] ?? null;
+
+            if (isset($schedule[$currentInstallmentNumber - 1])) {
+                $schedule[$currentInstallmentNumber - 1]['is_current'] = true;
+            }
+        } elseif ($baseDate && $termDays > 0) {
+            $currentDueDate = $baseDate->copy()->addDays($termDays);
+        } elseif ($commitmentDate) {
+            $currentDueDate = $commitmentDate;
+        } elseif ($baseDate) {
+            $currentDueDate = $baseDate->copy();
+        }
+
+        $daysInMora = 0;
+
+        if ($saldoPendiente > 0 && $currentDueDate && ! $currentDueDate->isFuture()) {
+            $daysInMora = $currentDueDate->diffInDays($today);
+        }
+
+        return [
+            'base_date' => $baseDate,
+            'commitment_date' => $commitmentDate,
+            'current_due_date' => $currentDueDate,
+            'current_installment_number' => $currentInstallmentNumber,
+            'installments' => $installments,
+            'installment_amount' => $installmentAmount,
+            'covered_installments' => $coveredInstallments,
+            'term_days' => $termDays,
+            'days_in_mora' => $daysInMora,
+            'schedule' => $schedule,
+            'balance' => $saldoPendiente,
+        ];
+    }
+
+    public static function saleCurrentDueDate(Venta $venta, ?CarbonInterface $today = null): ?Carbon
+    {
+        return self::saleSummary($venta, $today)['current_due_date'];
+    }
+
+    public static function saleDaysInMora(Venta $venta, ?CarbonInterface $today = null): int
+    {
+        return self::saleSummary($venta, $today)['days_in_mora'];
+    }
+
+    public static function saleSemaphore(Venta $venta, ?CarbonInterface $today = null): string
+    {
+        $summary = self::saleSummary($venta, $today);
+
+        if ($summary['balance'] <= 0) {
+            return 'al_dia';
+        }
+
+        if (! $summary['base_date'] && ! $summary['current_due_date']) {
+            return 'sin_fecha';
+        }
+
+        if (! $summary['current_due_date'] || $summary['current_due_date']->isFuture()) {
+            return 'al_dia';
+        }
+
+        if ($summary['days_in_mora'] <= 7) {
+            return 'verde';
+        }
+
+        if ($summary['days_in_mora'] <= 29) {
+            return 'amarillo';
+        }
+
+        return 'rojo';
+    }
+
+    public static function saleStage(Venta $venta, ?CarbonInterface $today = null): string
+    {
+        return match (self::saleSemaphore($venta, $today)) {
+            'al_dia' => 'Al dia',
+            'sin_fecha' => 'Pendiente de configurar',
+            'verde' => 'Mora temprana',
+            'amarillo' => 'En seguimiento',
+            'rojo' => 'Mora critica',
+            default => 'En seguimiento',
+        };
+    }
+
+    public static function saleMilestoneSchedule(Venta $venta, ?CarbonInterface $today = null): array
+    {
+        $summary = self::saleSummary($venta, $today);
+
+        return self::milestoneScheduleFromReferenceDate(
+            $summary['current_due_date'],
+            (float) $venta->saldo_pendiente_mora,
+            $today
+        );
+    }
+
+    public static function saleBuildCalendar(Venta $venta, CarbonInterface $visibleMonth, int $months, ?CarbonInterface $today = null): array
+    {
+        $summary = self::saleSummary($venta, $today);
+        $markers = [];
+
+        if ($summary['base_date']) {
+            $markers[] = [
+                'date' => $summary['base_date'],
+                'label' => 'Inicio',
+                'kind' => 'base',
             ];
         }
 
-        return $calendar;
+        if ($summary['current_due_date']) {
+            $markers[] = [
+                'date' => $summary['current_due_date'],
+                'label' => $summary['current_installment_number']
+                    ? 'C' . $summary['current_installment_number']
+                    : 'Vence',
+                'kind' => 'due',
+            ];
+        }
+
+        if ($summary['commitment_date']
+            && (! $summary['current_due_date'] || ! $summary['commitment_date']->isSameDay($summary['current_due_date']))
+        ) {
+            $markers[] = [
+                'date' => $summary['commitment_date'],
+                'label' => 'Comp.',
+                'kind' => 'commitment',
+            ];
+        }
+
+        return self::buildCalendarFromReferenceDate(
+            $visibleMonth,
+            $months,
+            $summary['current_due_date'],
+            (float) $venta->saldo_pendiente_mora,
+            $markers
+        );
     }
 
     public static function resolveDaySemaphore(CarbonInterface $date, ?CarbonInterface $fechaInicioMora, float $saldoPendiente): string
@@ -204,6 +352,91 @@ class MoraSupport
         }
 
         return 'rojo';
+    }
+
+    protected static function milestoneScheduleFromReferenceDate(?CarbonInterface $referenceDate, float $saldoPendiente, ?CarbonInterface $today = null): array
+    {
+        $baseDate = $referenceDate ? Carbon::parse($referenceDate)->startOfDay() : null;
+        $diasActuales = self::daysInMora($baseDate, $saldoPendiente, $today);
+
+        return collect(self::ALERT_MILESTONES)
+            ->map(function (int $day) use ($baseDate, $diasActuales) {
+                return [
+                    'day' => $day,
+                    'label' => match ($day) {
+                        7 => 'Primer aviso',
+                        15 => 'Segundo aviso',
+                        30 => 'Aviso critico',
+                        default => "Dia {$day}",
+                    },
+                    'date' => $baseDate?->copy()->addDays($day),
+                    'reached' => $baseDate ? $diasActuales >= $day : false,
+                ];
+            })
+            ->all();
+    }
+
+    protected static function buildCalendarFromReferenceDate(
+        CarbonInterface $visibleMonth,
+        int $months,
+        ?CarbonInterface $referenceDate,
+        float $saldoPendiente,
+        array $markers = []
+    ): array {
+        $calendar = [];
+        $cursor = Carbon::parse($visibleMonth)->startOfMonth();
+        $months = max(1, min(3, $months));
+        $normalizedMarkers = collect($markers)
+            ->filter(fn (array $marker) => ! empty($marker['date']))
+            ->mapWithKeys(function (array $marker) {
+                $date = Carbon::parse($marker['date'])->startOfDay();
+
+                return [$date->format('Y-m-d') => array_merge($marker, ['date' => $date])];
+            })
+            ->all();
+
+        for ($index = 0; $index < $months; $index++) {
+            $month = $cursor->copy()->addMonths($index);
+            $firstDay = $month->copy()->startOfMonth();
+            $lastDay = $month->copy()->endOfMonth();
+            $days = [];
+
+            for ($blank = 1; $blank < $firstDay->dayOfWeekIso; $blank++) {
+                $days[] = ['blank' => true];
+            }
+
+            for ($date = $firstDay->copy(); $date->lte($lastDay); $date->addDay()) {
+                $daySemaphore = self::resolveDaySemaphore($date, $referenceDate, $saldoPendiente);
+                $marker = $normalizedMarkers[$date->format('Y-m-d')] ?? null;
+
+                $days[] = [
+                    'blank' => false,
+                    'date' => $date->copy(),
+                    'is_today' => $date->isToday(),
+                    'is_mora_start' => $referenceDate ? $date->isSameDay($referenceDate) : false,
+                    'marker' => $marker,
+                    'semaphore' => $daySemaphore,
+                    'palette' => self::palette($daySemaphore),
+                ];
+            }
+
+            $calendar[] = [
+                'key' => $month->format('Y-m'),
+                'title' => ucfirst($month->translatedFormat('F Y')),
+                'days' => $days,
+            ];
+        }
+
+        return $calendar;
+    }
+
+    protected static function saleInstallmentDueDate(Carbon $baseDate, int $installmentNumber, int $installments, int $termDays): Carbon
+    {
+        if ($installments <= 1 && $termDays > 0) {
+            return $baseDate->copy()->addDays($termDays);
+        }
+
+        return $baseDate->copy()->addMonthsNoOverflow($installmentNumber);
     }
 
     public static function whatsappUrl(?string $telefono, string $mensaje): ?string

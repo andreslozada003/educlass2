@@ -192,17 +192,27 @@ class Venta extends Model
 
     public function getDiasEnMoraAttribute(): int
     {
-        return MoraSupport::daysInMora($this->fecha_inicio_mora, $this->saldo_pendiente_mora);
+        return MoraSupport::saleDaysInMora($this);
     }
 
     public function getMoraSemaforoAttribute(): string
     {
-        return MoraSupport::resolveSemaphore($this->fecha_inicio_mora, $this->saldo_pendiente_mora);
+        return MoraSupport::saleSemaphore($this);
     }
 
     public function getMoraEtapaAttribute(): string
     {
-        return MoraSupport::resolveStage($this->fecha_inicio_mora, $this->saldo_pendiente_mora);
+        return MoraSupport::saleStage($this);
+    }
+
+    public function getFechaMoraReferenciaAttribute()
+    {
+        return MoraSupport::saleCurrentDueDate($this);
+    }
+
+    public function getResumenMoraCreditoAttribute(): array
+    {
+        return MoraSupport::saleSummary($this);
     }
 
     public function getResumenEquipoMoraAttribute(): string

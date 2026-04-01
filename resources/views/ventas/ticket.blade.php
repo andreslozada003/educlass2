@@ -11,487 +11,346 @@
         }
 
         body {
-            font-family: DejaVu Sans, Arial, sans-serif;
+            font-family: "Courier New", "DejaVu Sans Mono", monospace;
             font-size: 10px;
-            line-height: 1.45;
-            color: #111827;
-            background: #ffffff;
+            line-height: 1.35;
+            color: #000;
+            background: #fff;
         }
 
         .ticket {
             width: 80mm;
             max-width: 302px;
             margin: 0 auto;
-            padding: 7px;
+            padding: 8px 7px 12px;
         }
 
-        .panel {
-            border: 1px solid #111827;
-            border-radius: 12px;
-            padding: 10px;
-            margin-bottom: 8px;
-        }
-
-        .header {
+        .center {
             text-align: center;
-            padding-bottom: 8px;
         }
 
-        .header-rule {
-            width: 100%;
-            height: 4px;
-            border-radius: 999px;
-            background: #111827;
-            margin-bottom: 10px;
+        .logo {
+            max-width: 72px;
+            max-height: 42px;
+            margin: 0 auto 6px;
+            display: block;
         }
 
-        .brand {
+        .company-name {
             font-size: 16px;
             font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+            margin-bottom: 3px;
         }
 
-        .subtitle {
-            margin-top: 3px;
-            font-size: 9px;
-            color: #4b5563;
-        }
-
-        .document-chip {
-            display: inline-block;
-            margin-top: 8px;
-            padding: 3px 8px;
-            border: 1px solid #111827;
-            border-radius: 999px;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-        }
-
-        .meta-grid {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .meta-grid td {
-            width: 50%;
-            vertical-align: top;
-            padding: 0 0 6px 0;
-        }
-
-        .label {
-            display: block;
-            font-size: 7px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: #6b7280;
+        .company-line {
             margin-bottom: 2px;
         }
 
-        .value {
-            font-size: 10px;
-            font-weight: 600;
-            color: #111827;
-        }
-
-        .muted {
-            color: #6b7280;
-            font-weight: 500;
-        }
-
-        .full-row {
-            margin-top: 6px;
-        }
-
         .separator {
-            border-top: 1px dashed #9ca3af;
-            margin: 8px 0;
+            border-top: 1px dashed #000;
+            margin: 9px 0;
         }
 
         .section-title {
-            font-size: 8px;
+            text-align: center;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.16em;
+            margin-bottom: 5px;
             text-transform: uppercase;
-            color: #374151;
-            margin-bottom: 6px;
         }
 
-        .meta-card {
-            border: 1px solid #d1d5db;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
+        .invoice-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2px;
         }
 
-        .meta-card + .meta-card {
-            margin-top: 6px;
+        .muted {
+            color: #111;
         }
 
-        .items-table {
+        .line {
+            margin-bottom: 3px;
+            word-break: break-word;
+        }
+
+        .line strong {
+            font-weight: 700;
+        }
+
+        table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .items-table th,
-        .items-table td {
-            text-align: left;
+        th,
+        td {
+            padding: 3px 2px;
             vertical-align: top;
-            padding: 4px 0;
         }
 
-        .items-table thead th {
-            font-size: 7px;
+        thead th {
             font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: #6b7280;
-            border-bottom: 1px solid #d1d5db;
-            padding-bottom: 5px;
+            border-bottom: 1px dashed #000;
+            border-top: 1px dashed #000;
         }
 
-        .items-table tbody td {
-            border-bottom: 1px dashed #e5e7eb;
+        tbody td {
+            border-bottom: 1px dotted #bbb;
         }
 
-        .col-qty {
-            width: 14%;
+        .no-border td {
+            border-bottom: 0;
         }
 
-        .col-item {
-            width: 56%;
-            padding-right: 6px;
-        }
-
-        .col-amount {
-            width: 30%;
+        .right {
             text-align: right;
         }
 
-        .item-name {
-            font-size: 10px;
-            font-weight: 600;
+        .small {
+            font-size: 9px;
         }
 
-        .item-line {
-            font-size: 8px;
-            color: #374151;
-            margin-top: 2px;
+        .total-block td {
+            padding: 2px 0;
         }
 
-        .item-meta {
-            font-size: 8px;
-            color: #6b7280;
-            margin-top: 1px;
-        }
-
-        .summary-row {
-            display: table;
-            width: 100%;
-            margin-bottom: 4px;
-        }
-
-        .summary-row span {
-            display: table-cell;
-        }
-
-        .summary-row .summary-label {
-            color: #4b5563;
-        }
-
-        .summary-row .summary-value {
-            text-align: right;
-            font-weight: 600;
-        }
-
-        .total-box {
-            border: 1px solid #111827;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
-        }
-
-        .total-box .summary-row {
-            margin-bottom: 0;
-        }
-
-        .total-box .summary-label,
-        .total-box .summary-value {
+        .grand-total td {
             font-size: 13px;
             font-weight: 700;
-            color: #111827;
+            border-top: 1px dashed #000;
+            padding-top: 5px;
         }
 
-        .status-box {
-            border: 1px solid #111827;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
+        .code-box {
+            margin: 10px 0 7px;
+            text-align: center;
         }
 
-        .status-title {
-            font-size: 8px;
+        .folio-display {
+            font-size: 22px;
             font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: #6b7280;
-            margin-bottom: 5px;
+            letter-spacing: 0.12em;
+            margin-top: 3px;
         }
 
-        .status-pill {
-            display: inline-block;
-            padding: 4px 8px;
-            border: 1px solid #111827;
-            border-radius: 999px;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
+        .signature {
+            margin-top: 14px;
+            text-align: center;
         }
 
-        .note-box {
-            border: 1px dashed #9ca3af;
-            border-radius: 10px;
-            padding: 8px;
-            margin-top: 8px;
+        .signature-line {
+            width: 78%;
+            margin: 0 auto 4px;
+            border-top: 1px solid #000;
+            padding-top: 4px;
         }
 
         .footer {
             text-align: center;
-            padding-top: 4px;
-        }
-
-        .footer strong {
-            display: block;
-            font-size: 10px;
-            margin-bottom: 3px;
-        }
-
-        .footer p {
-            font-size: 8px;
-            color: #4b5563;
+            font-size: 9px;
+            margin-top: 7px;
         }
     </style>
 </head>
 <body>
 @php
-    $ticketMoney = fn ($amount) => '$' . number_format((float) $amount, 0, ',', '.');
+    $money = fn ($amount) => money($amount, 2);
     $cliente = $venta->cliente;
     $saldoPendiente = max(0, (float) $venta->total - (float) $venta->monto_pagado);
-    $totalItems = $venta->detalles->sum('cantidad');
-    $estadoPago = $venta->estado === 'credito' && $saldoPendiente > 0 ? 'Credito' : 'Pagada';
     $metodoPago = ucfirst(str_replace('_', ' ', $venta->metodo_pago));
     $pagadoCon = (float) ($venta->pagado_con ?: 0);
+    $ivaPorcentaje = $venta->subtotal > 0 ? round(((float) $venta->impuestos / (float) $venta->subtotal) * 100, 2) : 0;
 @endphp
 
 <div class="ticket">
-    <div class="panel header">
-        <div class="header-rule"></div>
-        <div class="brand">{{ $empresa['nombre'] ?: 'CellFix Pro' }}</div>
+    <div class="center">
+        @if(!empty($empresa['logo_path']) && is_file($empresa['logo_path']))
+        <img src="{{ $empresa['logo_path'] }}" alt="Logo" class="logo">
+        @endif
+        <div class="company-name">{{ $empresa['nombre'] ?: 'Sistema POS' }}</div>
+        @if(!empty($empresa['rfc']))
+        <div class="company-line">NIT / RFC: {{ $empresa['rfc'] }}</div>
+        @endif
         @if(!empty($empresa['direccion']))
-        <div class="subtitle">{{ $empresa['direccion'] }}</div>
+        <div class="company-line">{{ $empresa['direccion'] }}</div>
         @endif
-        <div class="subtitle">
-            @if(!empty($empresa['telefono'])) Tel: {{ $empresa['telefono'] }} @endif
-            @if(!empty($empresa['rfc'])) {{ !empty($empresa['telefono']) ? ' | ' : '' }}RFC: {{ $empresa['rfc'] }} @endif
-        </div>
-        @if(!empty($empresa['email']))
-        <div class="subtitle">{{ $empresa['email'] }}</div>
+        @if(!empty($empresa['telefono']))
+        <div class="company-line">{{ $empresa['telefono'] }}</div>
         @endif
-        <div class="document-chip">Ticket de venta</div>
+        @if(!empty($empresa['web']))
+        <div class="company-line">{{ $empresa['web'] }}</div>
+        @endif
     </div>
 
-    <div class="panel">
-        <table class="meta-grid">
+    <div class="separator"></div>
+
+    <div class="invoice-title">Factura / Ticket {{ $venta->folio }}</div>
+    <div class="center muted">{{ $venta->fecha_venta->format('m/d/Y H:i') }}</div>
+
+    <div class="separator"></div>
+
+    <div class="line"><strong>Cliente:</strong> {{ $cliente?->nombre_completo ?: 'Cliente general' }}</div>
+    @if($cliente?->rfc)
+    <div class="line"><strong>NIT / RFC:</strong> {{ $cliente->rfc }}</div>
+    @endif
+    @if($cliente?->ciudad || $cliente?->estado)
+    <div class="line">{{ collect([$cliente?->ciudad, $cliente?->estado])->filter()->implode(' - ') }}</div>
+    @endif
+    <div class="line"><strong>Vendedor:</strong> {{ $venta->usuario?->name ?: 'Caja principal' }}</div>
+    <div class="line"><strong>Empleado:</strong> {{ $venta->usuario?->name ?: 'No asignado' }}</div>
+
+    <div class="separator"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 43%;">Articulo</th>
+                <th class="right" style="width: 22%;">Precio</th>
+                <th class="right" style="width: 13%;">Cant.</th>
+                <th class="right" style="width: 22%;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($venta->detalles as $detalle)
             <tr>
                 <td>
-                    <span class="label">Folio</span>
-                    <span class="value">{{ $venta->folio }}</span>
+                    {{ $detalle->producto?->nombre ?: 'Producto eliminado' }}
+                    @if($detalle->producto?->codigo)
+                    <div class="small">{{ $detalle->producto->codigo }}</div>
+                    @endif
+                    @if($detalle->notas)
+                    <div class="small">{{ $detalle->notas }}</div>
+                    @endif
                 </td>
-                <td>
-                    <span class="label">Fecha</span>
-                    <span class="value">{{ $venta->fecha_venta->format('d/m/Y H:i') }}</span>
-                </td>
+                <td class="right">{{ $money($detalle->precio_unitario) }}</td>
+                <td class="right">{{ $detalle->cantidad }}</td>
+                <td class="right">{{ $money($detalle->subtotal) }}</td>
             </tr>
-            <tr>
-                <td>
-                    <span class="label">Vendedor</span>
-                    <span class="value">{{ $venta->usuario?->name ?: 'No asignado' }}</span>
-                </td>
-                <td>
-                    <span class="label">Items</span>
-                    <span class="value">{{ $totalItems }}</span>
-                </td>
-            </tr>
-        </table>
+            @endforeach
+        </tbody>
+    </table>
 
-        <div class="separator"></div>
-
-        <div class="section-title">Cliente</div>
-        <div class="meta-card">
-            <div class="value">{{ $cliente?->nombre_completo ?: 'Cliente general' }}</div>
-            @if($cliente?->telefono)
-            <div class="item-meta">Telefono: {{ $cliente->telefono }}</div>
-            @endif
-            @if($cliente?->email)
-            <div class="item-meta">Email: {{ $cliente->email }}</div>
-            @endif
-            @if($cliente?->rfc)
-            <div class="item-meta">Documento / RFC: {{ $cliente->rfc }}</div>
-            @endif
-            @if($cliente?->direccion)
-            <div class="item-meta">{{ $cliente->direccion }}</div>
-            @endif
-            @if($cliente?->ciudad)
-            <div class="item-meta">{{ $cliente->ciudad }}</div>
-            @endif
-        </div>
-
-        <div class="meta-card">
-            <div class="summary-row">
-                <span class="summary-label">Metodo</span>
-                <span class="summary-value">{{ $metodoPago }}</span>
-            </div>
-            <div class="summary-row">
-                <span class="summary-label">Estado</span>
-                <span class="summary-value">{{ $estadoPago }}</span>
-            </div>
-            <div class="summary-row">
-                <span class="summary-label">Articulos</span>
-                <span class="summary-value">{{ $totalItems }}</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="section-title">Detalle</div>
-        <table class="items-table">
-            <thead>
-                <tr>
-                    <th class="col-qty">Cant</th>
-                    <th class="col-item">Descripcion</th>
-                    <th class="col-amount">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($venta->detalles as $detalle)
-                <tr>
-                    <td class="col-qty">
-                        <div class="item-name">{{ $detalle->cantidad }}</div>
-                        <div class="item-meta">x {{ $ticketMoney($detalle->precio_unitario) }}</div>
-                    </td>
-                    <td class="col-item">
-                        <div class="item-name">{{ $detalle->producto?->nombre ?: 'Producto eliminado' }}</div>
-                        <div class="item-line">{{ $detalle->cantidad }} x {{ $ticketMoney($detalle->precio_unitario) }}</div>
-                        @if($detalle->notas)
-                        <div class="item-meta">{{ $detalle->notas }}</div>
-                        @endif
-                    </td>
-                    <td class="col-amount">
-                        <div class="item-name">{{ $ticketMoney($detalle->subtotal) }}</div>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-
-    <div class="panel">
-        <div class="section-title">Resumen de pago</div>
-        <div class="summary-row">
-            <span class="summary-label">Subtotal</span>
-            <span class="summary-value">{{ $ticketMoney($venta->subtotal) }}</span>
-        </div>
-        <div class="summary-row">
-            <span class="summary-label">IVA (16%)</span>
-            <span class="summary-value">{{ $ticketMoney($venta->impuestos) }}</span>
-        </div>
+    <table class="total-block">
+        <tr class="no-border">
+            <td class="right"><strong>Subtotal:</strong> {{ $money($venta->subtotal) }}</td>
+        </tr>
         @if((float) $venta->descuento > 0)
-        <div class="summary-row">
-            <span class="summary-label">Descuento</span>
-            <span class="summary-value">-{{ $ticketMoney($venta->descuento) }}</span>
-        </div>
+        <tr class="no-border">
+            <td class="right"><strong>Descuento:</strong> -{{ $money($venta->descuento) }}</td>
+        </tr>
         @endif
+        <tr class="no-border grand-total">
+            <td class="right">TOTAL: {{ $money($venta->total) }}</td>
+        </tr>
+    </table>
 
-        <div class="total-box">
-            <div class="summary-row">
-                <span class="summary-label">Total</span>
-                <span class="summary-value">{{ $ticketMoney($venta->total) }}</span>
-            </div>
-        </div>
+    <div class="separator"></div>
 
-        <div class="status-box">
-            <div class="status-title">Estado de pago</div>
-            <div class="status-pill">{{ $estadoPago }}</div>
+    <div class="section-title">Detalle del impuesto</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th class="right">Base/Imp</th>
+                <th class="right">Impuesto</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>IVA {{ $ivaPorcentaje }}%</td>
+                <td class="right">{{ $money($venta->subtotal) }}</td>
+                <td class="right">{{ $money($venta->impuestos) }}</td>
+            </tr>
+        </tbody>
+    </table>
 
-            <div class="summary-row" style="margin-top: 8px;">
-                <span class="summary-label">Metodo</span>
-                <span class="summary-value">{{ $metodoPago }}</span>
-            </div>
-            @if($pagadoCon > 0)
-            <div class="summary-row">
-                <span class="summary-label">Recibido</span>
-                <span class="summary-value">{{ $ticketMoney($pagadoCon) }}</span>
-            </div>
-            @endif
-            <div class="summary-row">
-                <span class="summary-label">{{ $venta->estado === 'credito' ? 'Abono inicial' : 'Pagado' }}</span>
-                <span class="summary-value">{{ $ticketMoney($venta->monto_pagado ?: $venta->total) }}</span>
-            </div>
-            @if((float) $venta->cambio > 0)
-            <div class="summary-row">
-                <span class="summary-label">Cambio</span>
-                <span class="summary-value">{{ $ticketMoney($venta->cambio) }}</span>
-            </div>
-            @endif
-            @if($venta->estado === 'credito' && $saldoPendiente > 0)
-            <div class="summary-row">
-                <span class="summary-label">Saldo pendiente</span>
-                <span class="summary-value">{{ $ticketMoney($saldoPendiente) }}</span>
-            </div>
-            @endif
-            @if($venta->fecha_compromiso_pago)
-            <div class="summary-row">
-                <span class="summary-label">Compromiso</span>
-                <span class="summary-value">{{ $venta->fecha_compromiso_pago->format('d/m/Y') }}</span>
-            </div>
-            @endif
-        </div>
+    <div class="separator"></div>
 
-        @if($venta->estado === 'credito' && ($venta->fecha_inicio_mora || $venta->numero_cuotas || $venta->plazo_acordado_dias || $venta->mora_observaciones))
-        <div class="note-box">
-            <div class="section-title">Seguimiento de credito</div>
-            @if($venta->fecha_inicio_mora)
-            <div class="item-meta">Inicio mora: {{ $venta->fecha_inicio_mora->format('d/m/Y') }}</div>
-            @endif
-            @if($venta->numero_cuotas)
-            <div class="item-meta">Cuotas: {{ $venta->numero_cuotas }}</div>
-            @endif
-            @if($venta->plazo_acordado_dias)
-            <div class="item-meta">Plazo: {{ $venta->plazo_acordado_dias }} dias</div>
-            @endif
-            @if($venta->mora_observaciones)
-            <div class="item-meta" style="margin-top: 4px;">{{ $venta->mora_observaciones }}</div>
-            @endif
-        </div>
-        @endif
+    <div class="section-title">Forma de pago</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo de pago</th>
+                <th class="right">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ $venta->fecha_venta->format('d/m/Y') }}</td>
+                <td>{{ $venta->estado === 'credito' ? 'Linea de credito' : $metodoPago }}</td>
+                <td class="right">{{ $money($venta->monto_pagado ?: $venta->total) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="line" style="margin-top: 5px;"><strong>Metodo de pago:</strong> {{ $metodoPago }}</div>
+    @if($pagadoCon > 0)
+    <div class="line"><strong>Recibido:</strong> {{ $money($pagadoCon) }}</div>
+    @endif
+    <div class="line"><strong>Cambio:</strong> {{ $money($venta->cambio) }}</div>
+    @if($cliente)
+    <div class="line"><strong>Balance en la cuenta del cliente:</strong> {{ $money($clienteBalance) }}</div>
+    @endif
 
-        @if($venta->notas)
-        <div class="note-box">
-            <div class="section-title">Observaciones</div>
-            <div class="item-meta">{{ $venta->notas }}</div>
-        </div>
-        @endif
+    @if($venta->estado === 'credito' && $saldoPendiente > 0)
+    <div class="separator"></div>
+
+    <div class="section-title">Cuotas</div>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th class="right">Pendiente</th>
+                <th class="right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>{{ $venta->fecha_compromiso_pago?->format('d/m/Y') ?: 'No definida' }}</td>
+                <td>Pendiente</td>
+                <td class="right">{{ $money($saldoPendiente) }}</td>
+                <td class="right">{{ $money($venta->total) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    @if($venta->numero_cuotas)
+    <div class="line" style="margin-top: 5px;"><strong>Plan acordado:</strong> {{ $venta->numero_cuotas }} cuota(s)</div>
+    @endif
+    @if($venta->plazo_acordado_dias)
+    <div class="line"><strong>Plazo:</strong> {{ $venta->plazo_acordado_dias }} dia(s)</div>
+    @endif
+    @if($venta->mora_observaciones)
+    <div class="line">{{ $venta->mora_observaciones }}</div>
+    @endif
+    @endif
+
+    @if($venta->notas)
+    <div class="separator"></div>
+    <div class="line"><strong>Observaciones:</strong> {{ $venta->notas }}</div>
+    @endif
+
+    <div class="separator"></div>
+
+    <div class="center" style="font-weight: 700; margin-bottom: 2px;">SIMPLIFICADO</div>
+
+    <div class="code-box">
+        <div class="folio-display">{{ preg_replace('/[^0-9]/', '', $venta->folio) ?: $venta->id }}</div>
     </div>
 
-    <div class="panel footer">
-        <strong>Gracias por tu compra</strong>
-        <p>Conserva este ticket para garantias, soporte o seguimiento.</p>
-        <p>Comprobante interno de venta.</p>
-        <p>{{ $venta->fecha_venta->format('d/m/Y H:i:s') }}</p>
+    <div class="signature">
+        <div class="signature-line">Firma</div>
+        <div class="small">Titular acusa recibo de los bienes y/o servicios.</div>
+    </div>
+
+    <div class="footer">
+        <div>Gracias por su compra</div>
+        <div>Conserve este ticket para cambios, garantias o seguimiento.</div>
+        <div style="margin-top: 4px; font-weight: 700;">Desarrollado para {{ $empresa['nombre'] ?: 'Sistema POS' }}</div>
     </div>
 </div>
 </body>

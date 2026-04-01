@@ -195,7 +195,7 @@
                             <i class="fas fa-credit-card mr-2"></i>Venta a credito
                         </h4>
                         <p class="mt-1 text-xs leading-5 text-amber-800">
-                            Registra el abono inicial y la fecha desde la cual quieres que esta venta entre al modulo de mora.
+                            Registra el abono inicial, la fecha base del credito y el plan de cuotas para que el modulo de mora calcule vencimientos reales.
                         </p>
                     </div>
                     <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-200">
@@ -206,7 +206,7 @@
                 <div class="mt-4 grid gap-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label for="fecha_inicio_mora" class="block text-sm font-medium text-gray-700 mb-1">Fecha inicio mora</label>
+                            <label for="fecha_inicio_mora" class="block text-sm font-medium text-gray-700 mb-1">Fecha base del credito</label>
                             <input
                                 type="date"
                                 id="fecha_inicio_mora"
@@ -251,7 +251,7 @@
                     </div>
 
                     <div class="rounded-lg border border-amber-200 bg-white/80 px-3 py-3 text-xs text-amber-900">
-                        La venta aparecera en <span class="font-semibold">/mora</span> si el abono inicial es menor al total y existe una fecha de inicio de mora.
+                        La venta aparecera en <span class="font-semibold">/mora</span> si el abono inicial es menor al total. Las cuotas se calculan desde esta fecha base.
                     </div>
                 </div>
             </div>
@@ -599,7 +599,7 @@ function procesarVenta() {
     }
 
     if (esCredito && !$('#fecha_inicio_mora').val()) {
-        alert('Debes registrar la fecha de inicio de mora.');
+        alert('Debes registrar la fecha base del credito.');
         return;
     }
 

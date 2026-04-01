@@ -10,6 +10,10 @@
     $whatsappRoute = $isVenta ? route('mora.ventas.whatsapp', $record) : route('mora.reparaciones.whatsapp', $record);
     $updateRoute = $isVenta ? route('mora.ventas.update', $record) : route('mora.reparaciones.update', $record);
     $abonoRoute = $isVenta ? route('mora.ventas.abonos.store', $record) : route('mora.reparaciones.abonos.store', $record);
+    $creditSummary = $creditSummary ?? null;
+    $calendarQuery = array_merge(request()->except('month'), ['months' => $months]);
+    $previousMonthUrl = $detailRoute . '?' . http_build_query(array_merge($calendarQuery, ['month' => $visibleMonth->copy()->subMonth()->format('Y-m')]));
+    $nextMonthUrl = $detailRoute . '?' . http_build_query(array_merge($calendarQuery, ['month' => $visibleMonth->copy()->addMonth()->format('Y-m')]));
 @endphp
 
 <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50 p-6 shadow-sm">
@@ -43,8 +47,14 @@
                 <p class="mt-2 text-2xl font-semibold text-slate-900">{{ $record->dias_en_mora }}</p>
             </div>
             <div class="rounded-2xl border border-slate-200 bg-white p-4">
-                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Inicio mora</p>
-                <p class="mt-2 text-sm font-semibold text-slate-900">{{ $record->fecha_inicio_mora?->format('d/m/Y') ?: 'Sin fecha' }}</p>
+                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">{{ $isVenta ? 'Vence actual' : 'Inicio mora' }}</p>
+                <p class="mt-2 text-sm font-semibold text-slate-900">
+                    @if($isVenta && $creditSummary)
+                    {{ $creditSummary['current_due_date']?->format('d/m/Y') ?: 'Sin fecha' }}
+                    @else
+                    {{ $record->fecha_inicio_mora?->format('d/m/Y') ?: 'Sin fecha' }}
+                    @endif
+                </p>
             </div>
             <div class="rounded-2xl border border-slate-200 bg-white p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Ultimo aviso</p>
@@ -104,7 +114,17 @@
                             <p class="mt-1 font-medium text-slate-900">{{ $record->fecha_venta?->format('d/m/Y H:i') ?: 'Sin registro' }}</p>
                         </div>
                         <div>
-                            <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Cuotas o plazo</p>
+                            <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Base, cuotas y vencimiento</p>
+                            <p class="mt-1 text-sm font-medium text-slate-700">
+                                Base: {{ $creditSummary['base_date']?->format('d/m/Y') ?: ($record->fecha_inicio_mora?->format('d/m/Y') ?: 'Sin fecha base') }}
+                                <br>
+                                Vence actual:
+                                @if($creditSummary && $creditSummary['current_due_date'])
+                                {{ $creditSummary['current_installment_number'] ? 'Cuota ' . $creditSummary['current_installment_number'] . ' de ' . max(1, $creditSummary['installments']) . ' / ' : '' }}{{ $creditSummary['current_due_date']->format('d/m/Y') }}
+                                @else
+                                Sin vencimiento calculado
+                                @endif
+                            </p>
                             <p class="mt-1 font-medium text-slate-900">
                                 {{ $record->numero_cuotas ? $record->numero_cuotas . ' cuotas' : 'Sin cuotas registradas' }}
                                 @if($record->plazo_acordado_dias)
@@ -150,7 +170,13 @@
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900">Calendario semaforizado</h2>
-                        <p class="mt-1 text-sm text-slate-500">Puedes visualizar uno, dos o tres meses completos segun la mora configurada.</p>
+                        <p class="mt-1 text-sm text-slate-500">
+                            @if($isVenta && $creditSummary)
+                            El color se calcula desde el vencimiento vigente de la cuota actual.
+                            @else
+                            Puedes visualizar uno, dos o tres meses completos segun la mora configurada.
+                            @endif
+                        </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         @foreach([1, 2, 3] as $option)
@@ -161,8 +187,27 @@
                     </div>
                 </div>
 
+                @if($isVenta && $creditSummary)
+                <div class="mt-6 grid gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 p-4 sm:grid-cols-3">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Fecha base</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $creditSummary['base_date']?->format('d/m/Y') ?: 'Sin fecha base' }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Cuota vigente</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">
+                            {{ $creditSummary['current_installment_number'] ? 'Cuota ' . $creditSummary['current_installment_number'] . ' de ' . max(1, $creditSummary['installments']) : 'Sin cuota activa' }}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Vence</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $creditSummary['current_due_date']?->format('d/m/Y') ?: 'Sin vencimiento' }}</p>
+                    </div>
+                </div>
+                @endif
+
                 <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-                    <a href="{{ request()->fullUrlWithQuery(['month' => $visibleMonth->copy()->subMonth()->format('Y-m')]) }}" class="inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                    <a href="{{ $previousMonthUrl }}" class="inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
                         <i class="fas fa-chevron-left mr-2"></i>Anterior
                     </a>
                     <div class="flex flex-wrap items-center gap-2">
@@ -175,7 +220,7 @@
                         </span>
                         @endforeach
                     </div>
-                    <a href="{{ request()->fullUrlWithQuery(['month' => $visibleMonth->copy()->addMonth()->format('Y-m')]) }}" class="inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                    <a href="{{ $nextMonthUrl }}" class="inline-flex items-center rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
                         Siguiente<i class="fas fa-chevron-right ml-2"></i>
                     </a>
                 </div>
@@ -204,8 +249,8 @@
                                 <div class="aspect-square rounded-2xl border p-2 text-left {{ $day['palette']['calendar'] }} {{ $day['is_today'] ? 'ring-2 ring-slate-900/20' : '' }}">
                                     <div class="flex items-center justify-between">
                                         <span class="text-sm font-semibold">{{ $day['date']->day }}</span>
-                                        @if($day['is_mora_start'])
-                                        <span class="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Inicio</span>
+                                        @if(!empty($day['marker']))
+                                        <span class="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{{ $day['marker']['label'] }}</span>
                                         @endif
                                     </div>
                                 </div>
@@ -341,15 +386,20 @@
 
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 class="text-lg font-semibold text-slate-900">Configurar seguimiento</h2>
-                <p class="mt-1 text-sm text-slate-500">Actualiza la fecha de inicio, notas y condiciones de cobro.</p>
+                <p class="mt-1 text-sm text-slate-500">
+                    {{ $isVenta ? 'Actualiza la fecha base del credito, el compromiso y las condiciones de cobro.' : 'Actualiza la fecha de inicio, notas y condiciones de cobro.' }}
+                </p>
 
                 <form action="{{ $updateRoute }}" method="POST" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
 
                     <div>
-                        <label for="fecha_inicio_mora" class="mb-2 block text-sm font-medium text-slate-600">Fecha de inicio de mora</label>
+                        <label for="fecha_inicio_mora" class="mb-2 block text-sm font-medium text-slate-600">{{ $isVenta ? 'Fecha base del credito' : 'Fecha de inicio de mora' }}</label>
                         <input type="date" id="fecha_inicio_mora" name="fecha_inicio_mora" value="{{ old('fecha_inicio_mora', optional($record->fecha_inicio_mora)->format('Y-m-d')) }}" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100">
+                        @if($isVenta)
+                        <p class="mt-2 text-xs text-slate-500">Si la dejas vacia, el sistema toma la fecha de la venta para calcular las cuotas y los dias de mora.</p>
+                        @endif
                     </div>
 
                     @if($isVenta)

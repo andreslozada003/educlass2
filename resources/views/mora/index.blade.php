@@ -231,7 +231,7 @@
                         <th class="px-5 py-4">Cliente</th>
                         <th class="px-5 py-4">Equipo</th>
                         <th class="px-5 py-4">Saldo</th>
-                        <th class="px-5 py-4">Inicio mora</th>
+                        <th class="px-5 py-4">Vence / base</th>
                         <th class="px-5 py-4">Dias</th>
                         <th class="px-5 py-4">Semaforo</th>
                         <th class="px-5 py-4">Ultimo aviso</th>
@@ -263,7 +263,10 @@
                             @endif
                         </td>
                         <td class="px-5 py-4 align-top">
-                            @if($venta->fecha_inicio_mora)
+                            @if($venta->fecha_mora_referencia)
+                            <p class="font-medium text-slate-800">{{ $venta->fecha_mora_referencia->format('d/m/Y') }}</p>
+                            <p class="mt-1 text-xs text-slate-400">Base {{ ($venta->resumen_mora_credito['base_date'] ?? $venta->fecha_inicio_mora ?? $venta->fecha_venta)?->format('d/m/Y') }}</p>
+                            @elseif($venta->fecha_inicio_mora)
                             <p class="font-medium text-slate-800">{{ $venta->fecha_inicio_mora->format('d/m/Y') }}</p>
                             @else
                             <p class="font-medium text-slate-500">Sin fecha</p>

@@ -11,6 +11,7 @@ use App\Services\Facturacion\FacturaElectronicaService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class VentaController extends Controller
@@ -100,7 +101,7 @@ class VentaController extends Controller
             'plazo_acordado_dias' => 'nullable|integer|min:1|max:365',
         ], [
             'cliente_id.required_if' => 'Debes seleccionar un cliente para registrar una venta a credito.',
-            'fecha_inicio_mora.required_if' => 'Debes definir la fecha de inicio de mora para una venta a credito.',
+            'fecha_inicio_mora.required_if' => 'Debes definir la fecha base del credito para una venta a credito.',
         ]);
 
         $venta = DB::transaction(function () use ($validated) {
@@ -278,6 +279,23 @@ class VentaController extends Controller
     public function ticket(Venta $venta)
     {
         $venta->load(['cliente', 'usuario', 'detalles.producto']);
+        $clienteBalance = 0;
+
+        if ($venta->cliente_id) {
+            $clienteBalance = Venta::query()
+                ->where('cliente_id', $venta->cliente_id)
+                ->where('estado', '!=', 'cancelada')
+                ->whereColumn('total', '>', 'monto_pagado')
+                ->get()
+                ->sum(fn ($item) => max(0, (float) $item->total - (float) $item->monto_pagado));
+        }
+
+        $logo = Configuracion::get('empresa.logo', '');
+        $logoPath = null;
+
+        if ($logo && Storage::disk('public')->exists($logo)) {
+            $logoPath = Storage::disk('public')->path($logo);
+        }
 
         $empresa = [
             'nombre' => Configuracion::get('empresa.nombre', 'CellFix Pro'),
@@ -285,19 +303,50 @@ class VentaController extends Controller
             'telefono' => Configuracion::get('empresa.telefono', ''),
             'email' => Configuracion::get('empresa.email', ''),
             'rfc' => Configuracion::get('empresa.rfc', ''),
+            'logo_path' => $logoPath,
+            'web' => config('app.url'),
         ];
 
-        $paperHeight = 400
-            + ($venta->detalles->count() * 34)
-            + ($venta->cliente ? 56 : 0)
-            + ($venta->estado === 'credito' ? 72 : 0)
-            + ($venta->notas ? 60 : 0)
-            + ($venta->fecha_compromiso_pago ? 24 : 0);
+        $ticketWidthMm = (float) Configuracion::get('impresion.ticket_ancho', 80);
+        $paperWidth = max(58, min($ticketWidthMm, 80)) * 2.83465;
 
-        $paperHeight = max(620, min($paperHeight, 1400));
+        $detailLines = $venta->detalles->count()
+            + $venta->detalles->filter(fn ($detalle) => filled($detalle->notas))->count();
+        $clientLines = collect([
+            $venta->cliente?->telefono,
+            $venta->cliente?->email,
+            $venta->cliente?->rfc,
+            $venta->cliente?->direccion,
+            $venta->cliente?->ciudad,
+            $venta->cliente?->estado,
+        ])->filter()->count();
+        $creditLines = $venta->estado === 'credito'
+            ? collect([
+                $venta->fecha_inicio_mora,
+                $venta->fecha_compromiso_pago,
+                $venta->numero_cuotas,
+                $venta->plazo_acordado_dias,
+                $venta->mora_observaciones,
+            ])->filter()->count() + 4
+            : 0;
+        $noteLines = max(
+            filled($venta->notas) ? (int) ceil(mb_strlen($venta->notas) / 42) : 0,
+            filled($venta->mora_observaciones) ? (int) ceil(mb_strlen($venta->mora_observaciones) / 42) : 0
+        );
 
-        $pdf = PDF::loadView('ventas.ticket', compact('venta', 'empresa'));
-        $pdf->setPaper([0, 0, 226.77, $paperHeight], 'portrait');
+        $paperHeight = 560
+            + ($detailLines * 28)
+            + ($clientLines * 12)
+            + ($creditLines * 15)
+            + ($noteLines * 14)
+            + ($logoPath ? 34 : 0)
+            + ($venta->descuento > 0 ? 14 : 0)
+            + ($venta->estado === 'credito' ? 70 : 0);
+
+        $paperHeight = max(720, min($paperHeight, 1800));
+
+        $pdf = PDF::loadView('ventas.ticket', compact('venta', 'empresa', 'clienteBalance'));
+        $pdf->setPaper([0, 0, $paperWidth, $paperHeight], 'portrait');
 
         return $pdf->stream("ticket-{$venta->folio}.pdf");
     }

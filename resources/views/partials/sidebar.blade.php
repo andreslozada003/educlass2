@@ -177,6 +177,13 @@
         </div>
         @endcan
 
+        @can('ver reportes')
+        <a href="{{ route('az-libro.index') }}" class="flex items-center space-x-3 px-3 py-2 rounded-lg {{ request()->routeIs('az-libro.*') ? 'bg-primary-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white' }} transition-colors">
+            <i class="fas fa-book-open w-5"></i>
+            <span>AZ libro</span>
+        </a>
+        @endcan
+
         @if(auth()->user()->can('ver ventas') || auth()->user()->can('ver reparaciones'))
         <a href="{{ route('mora.index') }}" class="flex items-center space-x-3 px-3 py-2 rounded-lg {{ request()->routeIs('mora.*') ? 'bg-primary-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white' }} transition-colors">
             <i class="fas fa-signal w-5"></i>

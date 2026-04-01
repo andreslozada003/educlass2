@@ -16,6 +16,7 @@ use App\Http\Controllers\GastoController;
 use App\Http\Controllers\GastoProveedorController;
 use App\Http\Controllers\HerramientaController;
 use App\Http\Controllers\MoraController;
+use App\Http\Controllers\AzLibroController;
 
 /*
 |--------------------------------------------------------------------------
@@ -104,6 +105,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reportes/financiero', [ReporteController::class, 'financiero'])->name('reportes.financiero');
     Route::get('reportes/exportar/{tipo}/pdf', [ReporteController::class, 'exportarPdf'])->name('reportes.exportar.pdf');
     Route::get('reportes/exportar/{tipo}/excel', [ReporteController::class, 'exportarExcel'])->name('reportes.exportar.excel');
+
+    // AZ libro
+    Route::prefix('az-libro')->name('az-libro.')->group(function () {
+        Route::get('/', [AzLibroController::class, 'index'])->name('index');
+        Route::get('exportar/{dataset}/{format}', [AzLibroController::class, 'export'])->name('export');
+        Route::get('respaldo/zip', [AzLibroController::class, 'backup'])->name('backup');
+    });
 
     // Mora
     Route::prefix('mora')->name('mora.')->group(function () {
