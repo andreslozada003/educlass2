@@ -97,11 +97,12 @@ class VentaController extends Controller
             'notas' => 'nullable|string',
             'fecha_inicio_mora' => 'required_if:metodo_pago,credito|nullable|date',
             'fecha_compromiso_pago' => 'nullable|date|after_or_equal:fecha_inicio_mora',
-            'numero_cuotas' => 'nullable|integer|min:1|max:48',
+            'numero_cuotas' => 'required_if:metodo_pago,credito|nullable|integer|min:1|max:48',
             'plazo_acordado_dias' => 'nullable|integer|min:1|max:365',
         ], [
             'cliente_id.required_if' => 'Debes seleccionar un cliente para registrar una venta a credito.',
             'fecha_inicio_mora.required_if' => 'Debes definir la fecha base del credito para una venta a credito.',
+            'numero_cuotas.required_if' => 'Debes indicar cuantas cuotas tendra la venta a credito.',
         ]);
 
         $venta = DB::transaction(function () use ($validated) {

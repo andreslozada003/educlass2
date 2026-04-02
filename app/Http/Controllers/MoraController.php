@@ -75,6 +75,7 @@ class MoraController extends Controller
         $venta->load([
             'cliente',
             'usuario',
+            'cuotas',
             'detalles.producto',
             'moraAbonos.usuario',
             'moraNotificaciones.usuario',
@@ -167,9 +168,7 @@ class MoraController extends Controller
                 'notas' => $validated['notas'] ?? 'Abono registrado desde el modulo de mora.',
             ]);
 
-            $venta->monto_pagado = min((float) $venta->total, (float) $venta->monto_pagado + (float) $validated['monto']);
-            $venta->estado = $venta->monto_pagado < (float) $venta->total ? 'credito' : 'pagada';
-            $venta->save();
+            $venta->sincronizarMontoPagadoDesdeAbonos();
         });
 
         return back()->with('success', 'Abono registrado correctamente.');
@@ -314,6 +313,7 @@ class MoraController extends Controller
             ->with([
                 'cliente',
                 'usuario',
+                'cuotas',
                 'detalles.producto',
                 'ultimaMoraNotificacion',
             ])
@@ -338,14 +338,6 @@ class MoraController extends Controller
 
         if ($request->filled('asesor_id')) {
             $query->where('user_id', $request->asesor_id);
-        }
-
-        if ($request->filled('fecha_desde')) {
-            $query->whereDate('fecha_inicio_mora', '>=', $request->fecha_desde);
-        }
-
-        if ($request->filled('fecha_hasta')) {
-            $query->whereDate('fecha_inicio_mora', '<=', $request->fecha_hasta);
         }
 
         return $query->latest('fecha_venta');
@@ -405,6 +397,28 @@ class MoraController extends Controller
 
     protected function applyComputedFilters(Collection $items, Request $request): Collection
     {
+        if ($request->filled('fecha_desde')) {
+            $fechaDesde = Carbon::parse($request->fecha_desde)->startOfDay();
+            $items = $items->filter(function ($item) use ($fechaDesde) {
+                $referenceDate = $item instanceof Venta
+                    ? $item->fecha_mora_referencia
+                    : $item->fecha_inicio_mora;
+
+                return $referenceDate ? Carbon::parse($referenceDate)->startOfDay()->gte($fechaDesde) : false;
+            });
+        }
+
+        if ($request->filled('fecha_hasta')) {
+            $fechaHasta = Carbon::parse($request->fecha_hasta)->startOfDay();
+            $items = $items->filter(function ($item) use ($fechaHasta) {
+                $referenceDate = $item instanceof Venta
+                    ? $item->fecha_mora_referencia
+                    : $item->fecha_inicio_mora;
+
+                return $referenceDate ? Carbon::parse($referenceDate)->startOfDay()->lte($fechaHasta) : false;
+            });
+        }
+
         if ($request->filled('color')) {
             $items = $items->filter(fn ($item) => $item->mora_semaforo === $request->color);
         }

@@ -4,8 +4,10 @@ namespace App\Support;
 
 use App\Models\Reparacion;
 use App\Models\Venta;
+use App\Models\VentaCuota;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 
 class MoraSupport
 {
@@ -156,6 +158,42 @@ class MoraSupport
         return null;
     }
 
+    public static function syncSaleInstallments(Venta $venta, ?CarbonInterface $today = null): Collection
+    {
+        $rows = self::buildSaleInstallmentRows($venta, $today);
+
+        if ($rows->isEmpty()) {
+            $venta->cuotas()->delete();
+            $venta->setRelation('cuotas', collect());
+
+            return collect();
+        }
+
+        $numbers = $rows->pluck('numero_cuota')->all();
+        $timestamp = now();
+
+        $payload = $rows
+            ->map(function (array $row) use ($timestamp) {
+                return array_merge($row, [
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ]);
+            })
+            ->all();
+
+        $venta->cuotas()->whereNotIn('numero_cuota', $numbers)->delete();
+        $venta->cuotas()->upsert(
+            $payload,
+            ['venta_id', 'numero_cuota'],
+            ['fecha_vencimiento', 'valor_cuota', 'monto_pagado', 'saldo_pendiente', 'estado', 'fecha_pago', 'dias_mora', 'updated_at']
+        );
+
+        $freshInstallments = $venta->cuotas()->orderBy('numero_cuota')->get();
+        $venta->setRelation('cuotas', $freshInstallments);
+
+        return $freshInstallments;
+    }
+
     public static function saleSummary(Venta $venta, ?CarbonInterface $today = null): array
     {
         $today = Carbon::parse($today ?? now())->startOfDay();
@@ -163,53 +201,32 @@ class MoraSupport
         $commitmentDate = $venta->fecha_compromiso_pago
             ? Carbon::parse($venta->fecha_compromiso_pago)->startOfDay()
             : null;
-        $installments = max(0, (int) ($venta->numero_cuotas ?? 0));
         $termDays = max(0, (int) ($venta->plazo_acordado_dias ?? 0));
         $saldoPendiente = (float) $venta->saldo_pendiente_mora;
-
-        $installmentAmount = $installments > 0
-            ? round((float) $venta->total / max(1, $installments), 2)
-            : 0.0;
-
-        $coveredInstallments = $installmentAmount > 0
-            ? min($installments, (int) floor((((float) $venta->monto_pagado) + 0.00001) / $installmentAmount))
-            : 0;
-
-        $schedule = [];
-        $currentDueDate = null;
-        $currentInstallmentNumber = null;
-
-        if ($baseDate && $installments > 0) {
-            foreach (range(1, $installments) as $installmentNumber) {
-                $dueDate = self::saleInstallmentDueDate($baseDate, $installmentNumber, $installments, $termDays);
-
-                $schedule[] = [
-                    'number' => $installmentNumber,
-                    'date' => $dueDate,
-                    'is_paid' => $installmentNumber <= $coveredInstallments,
-                    'is_current' => false,
+        $cuotas = self::saleInstallmentCollection($venta, $today);
+        $currentQuota = $cuotas->first(fn (VentaCuota $cuota) => ! $cuota->esta_pagada);
+        $overdueQuota = $cuotas->first(fn (VentaCuota $cuota) => $cuota->esta_en_mora);
+        $paidInstallments = $cuotas->filter(fn (VentaCuota $cuota) => $cuota->esta_pagada)->count();
+        $installments = $cuotas->count();
+        $currentDueDate = $currentQuota?->fecha_vencimiento ?? $commitmentDate ?? $baseDate;
+        $currentInstallmentNumber = $currentQuota?->numero_cuota;
+        $daysInMora = $overdueQuota?->dias_mora_actual ?? 0;
+        $installmentAmount = (float) ($currentQuota?->valor_cuota ?? $cuotas->first()?->valor_cuota ?? 0);
+        $schedule = $cuotas
+            ->map(function (VentaCuota $cuota) use ($currentQuota) {
+                return [
+                    'number' => $cuota->numero_cuota,
+                    'date' => $cuota->fecha_vencimiento,
+                    'is_paid' => $cuota->esta_pagada,
+                    'is_current' => $currentQuota && $cuota->numero_cuota === $currentQuota->numero_cuota,
+                    'status' => $cuota->estado_calculado,
+                    'status_label' => $cuota->estado_etiqueta,
+                    'amount' => (float) $cuota->valor_cuota,
+                    'days_in_mora' => $cuota->dias_mora_actual,
                 ];
-            }
-
-            $currentInstallmentNumber = min($installments, max(1, $coveredInstallments + 1));
-            $currentDueDate = $schedule[$currentInstallmentNumber - 1]['date'] ?? null;
-
-            if (isset($schedule[$currentInstallmentNumber - 1])) {
-                $schedule[$currentInstallmentNumber - 1]['is_current'] = true;
-            }
-        } elseif ($baseDate && $termDays > 0) {
-            $currentDueDate = $baseDate->copy()->addDays($termDays);
-        } elseif ($commitmentDate) {
-            $currentDueDate = $commitmentDate;
-        } elseif ($baseDate) {
-            $currentDueDate = $baseDate->copy();
-        }
-
-        $daysInMora = 0;
-
-        if ($saldoPendiente > 0 && $currentDueDate && ! $currentDueDate->isFuture()) {
-            $daysInMora = $currentDueDate->diffInDays($today);
-        }
+            })
+            ->values()
+            ->all();
 
         return [
             'base_date' => $baseDate,
@@ -218,11 +235,15 @@ class MoraSupport
             'current_installment_number' => $currentInstallmentNumber,
             'installments' => $installments,
             'installment_amount' => $installmentAmount,
-            'covered_installments' => $coveredInstallments,
+            'covered_installments' => $paidInstallments,
             'term_days' => $termDays,
             'days_in_mora' => $daysInMora,
             'schedule' => $schedule,
             'balance' => $saldoPendiente,
+            'current_quota' => $currentQuota,
+            'overdue_quota' => $overdueQuota,
+            'has_overdue_installment' => $overdueQuota !== null,
+            'cuotas' => $cuotas,
         ];
     }
 
@@ -248,19 +269,15 @@ class MoraSupport
             return 'sin_fecha';
         }
 
-        if (! $summary['current_due_date'] || $summary['current_due_date']->isFuture()) {
-            return 'al_dia';
+        if ($summary['has_overdue_installment']) {
+            return 'rojo';
         }
 
-        if ($summary['days_in_mora'] <= 7) {
+        if ($summary['current_due_date']) {
             return 'verde';
         }
 
-        if ($summary['days_in_mora'] <= 29) {
-            return 'amarillo';
-        }
-
-        return 'rojo';
+        return 'sin_fecha';
     }
 
     public static function saleStage(Venta $venta, ?CarbonInterface $today = null): string
@@ -268,9 +285,9 @@ class MoraSupport
         return match (self::saleSemaphore($venta, $today)) {
             'al_dia' => 'Al dia',
             'sin_fecha' => 'Pendiente de configurar',
-            'verde' => 'Mora temprana',
+            'verde' => 'Cuota pendiente',
             'amarillo' => 'En seguimiento',
-            'rojo' => 'Mora critica',
+            'rojo' => 'Cuota en mora',
             default => 'En seguimiento',
         };
     }
@@ -309,6 +326,26 @@ class MoraSupport
             ];
         }
 
+        foreach ($summary['cuotas'] as $cuota) {
+            $markers[] = [
+                'date' => $cuota->fecha_vencimiento,
+                'label' => 'C' . $cuota->numero_cuota,
+                'kind' => $cuota->estado_calculado,
+                'entry_type' => 'installment',
+                'client_name' => $venta->cliente?->nombre_completo ?: 'Cliente',
+                'amount_label' => money($cuota->valor_cuota),
+                'status_label' => $cuota->estado_etiqueta,
+                'installment_number' => $cuota->numero_cuota,
+                'days_in_mora' => $cuota->dias_mora_actual,
+                'badge_classes' => $cuota->estado_badge_classes,
+                'card_classes' => match ($cuota->estado_calculado) {
+                    'pagada' => 'border-emerald-200 bg-emerald-50/80 text-emerald-700',
+                    'vencida' => 'border-rose-200 bg-rose-50/80 text-rose-700',
+                    default => 'border-slate-200 bg-white/80 text-slate-700',
+                },
+            ];
+        }
+
         if ($summary['commitment_date']
             && (! $summary['current_due_date'] || ! $summary['commitment_date']->isSameDay($summary['current_due_date']))
         ) {
@@ -322,13 +359,19 @@ class MoraSupport
         return self::buildCalendarFromReferenceDate(
             $visibleMonth,
             $months,
-            $summary['current_due_date'],
+            $summary['overdue_quota']?->fecha_vencimiento,
             (float) $venta->saldo_pendiente_mora,
-            $markers
+            $markers,
+            true
         );
     }
 
-    public static function resolveDaySemaphore(CarbonInterface $date, ?CarbonInterface $fechaInicioMora, float $saldoPendiente): string
+    public static function resolveDaySemaphore(
+        CarbonInterface $date,
+        ?CarbonInterface $fechaInicioMora,
+        float $saldoPendiente,
+        bool $forceRedFromReference = false
+    ): string
     {
         if ($saldoPendiente <= 0 || ! $fechaInicioMora) {
             return 'al_dia';
@@ -339,6 +382,10 @@ class MoraSupport
 
         if ($dia->lt($fechaInicio)) {
             return 'al_dia';
+        }
+
+        if ($forceRedFromReference) {
+            return 'rojo';
         }
 
         $dias = $fechaInicio->diffInDays($dia);
@@ -381,17 +428,28 @@ class MoraSupport
         int $months,
         ?CarbonInterface $referenceDate,
         float $saldoPendiente,
-        array $markers = []
+        array $markers = [],
+        bool $forceRedFromReference = false
     ): array {
         $calendar = [];
         $cursor = Carbon::parse($visibleMonth)->startOfMonth();
         $months = max(1, min(3, $months));
         $normalizedMarkers = collect($markers)
             ->filter(fn (array $marker) => ! empty($marker['date']))
-            ->mapWithKeys(function (array $marker) {
+            ->groupBy(function (array $marker) {
                 $date = Carbon::parse($marker['date'])->startOfDay();
 
-                return [$date->format('Y-m-d') => array_merge($marker, ['date' => $date])];
+                return $date->format('Y-m-d');
+            })
+            ->map(function (Collection $group) {
+                return $group
+                    ->map(function (array $marker) {
+                        $date = Carbon::parse($marker['date'])->startOfDay();
+
+                        return array_merge($marker, ['date' => $date]);
+                    })
+                    ->values()
+                    ->all();
             })
             ->all();
 
@@ -406,14 +464,16 @@ class MoraSupport
             }
 
             for ($date = $firstDay->copy(); $date->lte($lastDay); $date->addDay()) {
-                $daySemaphore = self::resolveDaySemaphore($date, $referenceDate, $saldoPendiente);
-                $marker = $normalizedMarkers[$date->format('Y-m-d')] ?? null;
+                $daySemaphore = self::resolveDaySemaphore($date, $referenceDate, $saldoPendiente, $forceRedFromReference);
+                $entries = $normalizedMarkers[$date->format('Y-m-d')] ?? [];
+                $marker = $entries[0] ?? null;
 
                 $days[] = [
                     'blank' => false,
                     'date' => $date->copy(),
                     'is_today' => $date->isToday(),
                     'is_mora_start' => $referenceDate ? $date->isSameDay($referenceDate) : false,
+                    'entries' => $entries,
                     'marker' => $marker,
                     'semaphore' => $daySemaphore,
                     'palette' => self::palette($daySemaphore),
@@ -437,6 +497,234 @@ class MoraSupport
         }
 
         return $baseDate->copy()->addMonthsNoOverflow($installmentNumber);
+    }
+
+    protected static function saleInstallmentCollection(Venta $venta, ?CarbonInterface $today = null): Collection
+    {
+        $calculatedRows = self::buildSaleInstallmentRows($venta, $today);
+        $cuotas = $venta->relationLoaded('cuotas')
+            ? $venta->cuotas->sortBy('numero_cuota')->values()
+            : $venta->cuotas()->orderBy('numero_cuota')->get();
+
+        if ($cuotas->isNotEmpty() && ! self::installmentsNeedSync($cuotas, $calculatedRows)) {
+            return $cuotas->values();
+        }
+
+        if ($cuotas->isNotEmpty()) {
+            return self::syncSaleInstallments($venta, $today)->values();
+        }
+
+        return $calculatedRows
+            ->map(function (array $row) {
+                $cuota = new VentaCuota($row);
+                $cuota->exists = false;
+
+                return $cuota;
+            })
+            ->values();
+    }
+
+    protected static function installmentsNeedSync(Collection $existingRows, Collection $calculatedRows): bool
+    {
+        if ($existingRows->count() !== $calculatedRows->count()) {
+            return true;
+        }
+
+        foreach ($calculatedRows as $offset => $row) {
+            /** @var VentaCuota $existing */
+            $existing = $existingRows[$offset];
+
+            if ((int) $existing->numero_cuota !== (int) $row['numero_cuota']) {
+                return true;
+            }
+
+            if ($existing->fecha_vencimiento?->toDateString() !== $row['fecha_vencimiento']) {
+                return true;
+            }
+
+            if (round((float) $existing->valor_cuota, 2) !== round((float) $row['valor_cuota'], 2)) {
+                return true;
+            }
+
+            if (round((float) $existing->monto_pagado, 2) !== round((float) $row['monto_pagado'], 2)) {
+                return true;
+            }
+
+            if (round((float) $existing->saldo_pendiente, 2) !== round((float) $row['saldo_pendiente'], 2)) {
+                return true;
+            }
+
+            if ((string) $existing->estado !== (string) $row['estado']) {
+                return true;
+            }
+
+            if (($existing->fecha_pago?->toDateTimeString()) !== $row['fecha_pago']) {
+                return true;
+            }
+
+            if ((int) $existing->dias_mora !== (int) $row['dias_mora']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected static function buildSaleInstallmentRows(Venta $venta, ?CarbonInterface $today = null): Collection
+    {
+        if (! self::shouldTrackSaleInstallments($venta)) {
+            return collect();
+        }
+
+        $today = Carbon::parse($today ?? now())->startOfDay();
+        $openDefinitions = collect(self::saleInstallmentDefinitions($venta))->values();
+        $payments = self::salePaymentEvents($venta);
+        $remainingBalance = round((float) $venta->total, 2);
+        $paidDefinitions = collect();
+
+        foreach ($payments as $payment) {
+            if ($remainingBalance <= 0.009 || $openDefinitions->isEmpty()) {
+                break;
+            }
+
+            $remainingPayment = round(min((float) $payment['monto'], $remainingBalance), 2);
+
+            if ($remainingPayment <= 0) {
+                continue;
+            }
+
+            $paymentDate = Carbon::parse($payment['fecha_pago'])->startOfDay();
+
+            while ($remainingPayment > 0.009 && $openDefinitions->isNotEmpty() && $remainingBalance > 0.009) {
+                $currentValue = self::splitInstallmentAmounts($remainingBalance, $openDefinitions->count())[0] ?? $remainingBalance;
+                $currentValue = round((float) $currentValue, 2);
+
+                if ($remainingPayment + 0.009 < $currentValue) {
+                    break;
+                }
+
+                $currentDefinition = $openDefinitions->shift();
+
+                $paidDefinitions->push([
+                    'venta_id' => $currentDefinition['venta_id'],
+                    'numero_cuota' => $currentDefinition['numero_cuota'],
+                    'fecha_vencimiento' => Carbon::parse($currentDefinition['fecha_vencimiento'])->toDateString(),
+                    'valor_cuota' => round((float) $currentValue, 2),
+                    'monto_pagado' => round((float) $currentValue, 2),
+                    'saldo_pendiente' => 0.0,
+                    'estado' => 'pagada',
+                    'fecha_pago' => $paymentDate->toDateTimeString(),
+                    'dias_mora' => 0,
+                ]);
+
+                $remainingBalance = round(max($remainingBalance - $currentValue, 0), 2);
+                $remainingPayment = round(max($remainingPayment - $currentValue, 0), 2);
+            }
+
+            if ($remainingPayment > 0.009 && $remainingBalance > 0.009) {
+                $remainingBalance = round(max($remainingBalance - min($remainingPayment, $remainingBalance), 0), 2);
+            }
+        }
+
+        if ($openDefinitions->isEmpty() || $remainingBalance <= 0.009) {
+            return $paidDefinitions->values();
+        }
+
+        $openAmounts = self::splitInstallmentAmounts($remainingBalance, $openDefinitions->count());
+        $openRows = $openDefinitions->values()->map(function (array $definition, int $offset) use ($openAmounts, $today) {
+            $dueDate = Carbon::parse($definition['fecha_vencimiento'])->startOfDay();
+            $value = round((float) ($openAmounts[$offset] ?? 0), 2);
+            $isOverdue = $today->gte($dueDate);
+
+            return [
+                'venta_id' => $definition['venta_id'],
+                'numero_cuota' => $definition['numero_cuota'],
+                'fecha_vencimiento' => $dueDate->toDateString(),
+                'valor_cuota' => $value,
+                'monto_pagado' => 0.0,
+                'saldo_pendiente' => $value,
+                'estado' => $isOverdue ? 'vencida' : 'pendiente',
+                'fecha_pago' => null,
+                'dias_mora' => $isOverdue ? $dueDate->diffInDays($today) : 0,
+            ];
+        });
+
+        return $paidDefinitions
+            ->concat($openRows)
+            ->sortBy('numero_cuota')
+            ->values();
+    }
+
+    protected static function shouldTrackSaleInstallments(Venta $venta): bool
+    {
+        return ((string) $venta->metodo_pago === 'credito'
+                || (string) $venta->estado === 'credito'
+                || (int) ($venta->numero_cuotas ?? 0) > 0)
+            && (float) $venta->total > 0
+            && self::saleCreditBaseDate($venta) !== null;
+    }
+
+    protected static function saleInstallmentDefinitions(Venta $venta): array
+    {
+        $installments = max(1, (int) ($venta->numero_cuotas ?: 1));
+        $baseDate = self::saleCreditBaseDate($venta) ?? now()->startOfDay();
+        $termDays = max(0, (int) ($venta->plazo_acordado_dias ?? 0));
+        $amounts = self::splitInstallmentAmounts((float) $venta->total, $installments);
+
+        return collect(range(1, $installments))
+            ->map(function (int $number) use ($venta, $baseDate, $installments, $termDays, $amounts) {
+                return [
+                    'venta_id' => $venta->id,
+                    'numero_cuota' => $number,
+                    'fecha_vencimiento' => self::saleInstallmentDueDate($baseDate, $number, $installments, $termDays),
+                    'valor_cuota' => $amounts[$number - 1] ?? 0,
+                ];
+            })
+            ->all();
+    }
+
+    protected static function salePaymentEvents(Venta $venta): Collection
+    {
+        $abonos = $venta->relationLoaded('moraAbonos')
+            ? $venta->moraAbonos
+            : $venta->moraAbonos()->orderBy('fecha_pago')->orderBy('id')->get();
+
+        $payments = $abonos
+            ->filter(fn ($abono) => (float) $abono->monto > 0)
+            ->sortBy(fn ($abono) => ($abono->fecha_pago?->timestamp ?? 0) . '-' . $abono->id)
+            ->values()
+            ->map(function ($abono) {
+                return [
+                    'monto' => round((float) $abono->monto, 2),
+                    'fecha_pago' => $abono->fecha_pago ?: now(),
+                ];
+            });
+
+        if ($payments->isNotEmpty()) {
+            return $payments;
+        }
+
+        if ((float) $venta->monto_pagado <= 0) {
+            return collect();
+        }
+
+        return collect([[
+            'monto' => round((float) $venta->monto_pagado, 2),
+            'fecha_pago' => $venta->fecha_venta ?: now(),
+        ]]);
+    }
+
+    protected static function splitInstallmentAmounts(float $total, int $installments): array
+    {
+        $installments = max(1, $installments);
+        $precision = abs($total - round($total, 0)) < 0.00001 ? 0 : 2;
+        $factor = 10 ** $precision;
+        $base = floor(($total / $installments) * $factor) / $factor;
+        $amounts = array_fill(0, $installments, round($base, $precision));
+        $assigned = round($base * ($installments - 1), $precision);
+        $amounts[$installments - 1] = round($total - $assigned, $precision);
+
+        return $amounts;
     }
 
     public static function whatsappUrl(?string $telefono, string $mensaje): ?string

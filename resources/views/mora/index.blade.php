@@ -241,7 +241,8 @@
                 <tbody class="divide-y divide-slate-100">
                     @forelse($ventas as $venta)
                     @php($palette = \App\Support\MoraSupport::palette($venta->mora_semaforo))
-                    <tr class="transition hover:bg-slate-50/80">
+                    @php($summary = $venta->resumen_mora_credito)
+                    <tr class="transition {{ $summary['has_overdue_installment'] ? 'bg-rose-50/50 hover:bg-rose-50/80' : 'hover:bg-slate-50/80' }}">
                         <td class="px-5 py-4 align-top">
                             <p class="font-semibold text-slate-900">{{ $venta->folio }}</p>
                             <p class="mt-1 text-sm text-slate-500">{{ $venta->fecha_venta?->format('d/m/Y') }}</p>
@@ -265,6 +266,9 @@
                         <td class="px-5 py-4 align-top">
                             @if($venta->fecha_mora_referencia)
                             <p class="font-medium text-slate-800">{{ $venta->fecha_mora_referencia->format('d/m/Y') }}</p>
+                            @if($summary['current_installment_number'])
+                            <p class="mt-1 text-xs font-semibold {{ $summary['has_overdue_installment'] ? 'text-rose-600' : 'text-slate-500' }}">Cuota {{ $summary['current_installment_number'] }} de {{ max(1, $summary['installments']) }}</p>
+                            @endif
                             <p class="mt-1 text-xs text-slate-400">Base {{ ($venta->resumen_mora_credito['base_date'] ?? $venta->fecha_inicio_mora ?? $venta->fecha_venta)?->format('d/m/Y') }}</p>
                             @elseif($venta->fecha_inicio_mora)
                             <p class="font-medium text-slate-800">{{ $venta->fecha_inicio_mora->format('d/m/Y') }}</p>
@@ -274,13 +278,16 @@
                             @endif
                         </td>
                         <td class="px-5 py-4 align-top">
-                            <p class="font-semibold text-slate-900">{{ $venta->dias_en_mora }}</p>
-                            <p class="mt-1 text-xs text-slate-500">{{ $venta->mora_etapa }}</p>
+                            <p class="font-semibold {{ $summary['has_overdue_installment'] ? 'text-rose-600' : 'text-slate-900' }}">{{ $venta->dias_en_mora }}</p>
+                            <p class="mt-1 text-xs {{ $summary['has_overdue_installment'] ? 'text-rose-600' : 'text-slate-500' }}">{{ $venta->mora_etapa }}</p>
                         </td>
                         <td class="px-5 py-4 align-top">
                             <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold {{ $palette['badge'] }}">
                                 <span class="h-2.5 w-2.5 rounded-full {{ $palette['dot'] }}"></span>{{ $palette['label'] }}
                             </span>
+                            @if($summary['current_quota'])
+                            <p class="mt-2 text-xs text-slate-500">{{ money($summary['current_quota']->valor_cuota) }} · {{ $summary['current_quota']->estado_etiqueta }}</p>
+                            @endif
                         </td>
                         <td class="px-5 py-4 align-top">
                             @if($venta->ultima_notificacion_mora_at)

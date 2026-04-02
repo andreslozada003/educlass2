@@ -80,7 +80,14 @@ class MoraModuleTest extends TestCase
 
             $this->assertSame('2026-04-30', MoraSupport::saleCurrentDueDate($venta)?->format('Y-m-d'));
             $this->assertSame(5, $venta->dias_en_mora);
-            $this->assertSame('verde', $venta->mora_semaforo);
+            $this->assertSame('rojo', $venta->mora_semaforo);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 1,
+                'fecha_vencimiento' => '2026-04-30',
+                'estado' => 'vencida',
+                'dias_mora' => 5,
+            ]);
         } finally {
             Carbon::setTestNow();
         }
@@ -111,6 +118,25 @@ class MoraModuleTest extends TestCase
             $this->assertSame(3, $summary['current_installment_number']);
             $this->assertSame('2026-06-30', $summary['current_due_date']?->format('Y-m-d'));
             $this->assertSame(3, $venta->dias_en_mora);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 1,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 2,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 3,
+                'fecha_vencimiento' => '2026-06-30',
+                'estado' => 'vencida',
+                'dias_mora' => 3,
+            ]);
         } finally {
             Carbon::setTestNow();
         }
@@ -141,6 +167,8 @@ class MoraModuleTest extends TestCase
 
             $defaultResponse
                 ->assertOk()
+                ->assertSee('Plan de cuotas', false)
+                ->assertSee('Cuota 1', false)
                 ->assertViewHas('visibleMonth', fn ($month) => $month instanceof Carbon && $month->format('Y-m') === '2026-04');
 
             $nextResponse = $this
@@ -150,6 +178,114 @@ class MoraModuleTest extends TestCase
             $nextResponse
                 ->assertOk()
                 ->assertViewHas('visibleMonth', fn ($month) => $month instanceof Carbon && $month->format('Y-m') === '2026-05');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_new_payments_are_applied_to_the_oldest_pending_installments(): void
+    {
+        Carbon::setTestNow('2026-07-10 09:00:00');
+
+        try {
+            $user = $this->createUserWithSalesPermission();
+            $venta = $this->createCreditSale($user, [
+                'folio' => 'V-MORA-PLAN-004',
+                'fecha_venta' => '2026-03-31 10:00:00',
+                'fecha_inicio_mora' => '2026-03-31',
+                'subtotal' => 420.17,
+                'impuestos' => 79.83,
+                'total' => 500,
+                'monto_pagado' => 0,
+                'pagado_con' => 0,
+                'numero_cuotas' => 5,
+                'plazo_acordado_dias' => 150,
+            ]);
+
+            $response = $this
+                ->actingAs($user)
+                ->from(route('mora.ventas.show', $venta))
+                ->post(route('mora.ventas.abonos.store', $venta), [
+                    'monto' => 200,
+                    'metodo_pago' => 'efectivo',
+                    'fecha_pago' => '2026-07-10',
+                    'notas' => 'Pago para las cuotas mas antiguas',
+                ]);
+
+            $response->assertRedirect(route('mora.ventas.show', $venta));
+
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 1,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 2,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 3,
+                'fecha_vencimiento' => '2026-06-30',
+                'estado' => 'vencida',
+                'saldo_pendiente' => 100,
+                'dias_mora' => 10,
+            ]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_remaining_balance_is_redistributed_across_the_pending_installments(): void
+    {
+        Carbon::setTestNow('2026-07-03 09:00:00');
+
+        try {
+            $user = $this->createUserWithSalesPermission();
+            $venta = $this->createCreditSale($user, [
+                'folio' => 'V-MORA-PLAN-005',
+                'fecha_venta' => '2026-03-31 10:00:00',
+                'fecha_inicio_mora' => '2026-03-31',
+                'subtotal' => 194.12,
+                'impuestos' => 36.88,
+                'total' => 231,
+                'monto_pagado' => 92,
+                'pagado_con' => 92,
+                'numero_cuotas' => 5,
+                'plazo_acordado_dias' => 150,
+            ]);
+
+            $summary = $venta->resumen_mora_credito;
+
+            $this->assertSame(2, $summary['covered_installments']);
+            $this->assertSame(3, $summary['current_installment_number']);
+            $this->assertSame('2026-06-30', $summary['current_due_date']?->format('Y-m-d'));
+            $this->assertSame(46.0, (float) $venta->cuotas()->where('numero_cuota', 3)->value('valor_cuota'));
+            $this->assertSame(46.0, (float) $venta->cuotas()->where('numero_cuota', 4)->value('valor_cuota'));
+            $this->assertSame(47.0, (float) $venta->cuotas()->where('numero_cuota', 5)->value('valor_cuota'));
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 1,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 2,
+                'estado' => 'pagada',
+                'saldo_pendiente' => 0,
+            ]);
+            $this->assertDatabaseHas('venta_cuotas', [
+                'venta_id' => $venta->id,
+                'numero_cuota' => 3,
+                'valor_cuota' => 46,
+                'saldo_pendiente' => 46,
+                'estado' => 'vencida',
+                'dias_mora' => 3,
+            ]);
         } finally {
             Carbon::setTestNow();
         }
@@ -174,7 +310,7 @@ class MoraModuleTest extends TestCase
             'activo' => true,
         ]);
 
-        return Venta::create(array_merge([
+        $venta = Venta::create(array_merge([
             'folio' => 'V-MORA-001',
             'cliente_id' => $cliente->id,
             'user_id' => $user->id,
@@ -190,5 +326,22 @@ class MoraModuleTest extends TestCase
             'estado' => 'credito',
             'fecha_inicio_mora' => now()->subDays(10)->toDateString(),
         ], $overrides));
+
+        if ((float) $venta->monto_pagado > 0) {
+            $venta->moraAbonos()->create([
+                'cliente_id' => $venta->cliente_id,
+                'user_id' => $venta->user_id,
+                'tipo' => 'abono',
+                'monto' => (float) $venta->monto_pagado,
+                'metodo_pago' => $venta->metodo_pago,
+                'origen' => 'test_seed',
+                'fecha_pago' => $venta->fecha_venta,
+                'notas' => 'Abono inicial de prueba.',
+            ]);
+
+            $venta->sincronizarCuotasCredito();
+        }
+
+        return $venta;
     }
 }

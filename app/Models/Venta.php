@@ -5,13 +5,17 @@ namespace App\Models;
 use App\Support\MoraSupport;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 
 class Venta extends Model
 {
     use HasFactory, SoftDeletes;
+
+    protected static bool $syncingInstallments = false;
 
     protected $fillable = [
         'folio',
@@ -75,6 +79,20 @@ class Venta extends Model
                 'color' => 'green',
             ]);
         });
+
+        static::saved(function (self $venta) {
+            if (self::$syncingInstallments || ! Schema::hasTable('venta_cuotas')) {
+                return;
+            }
+
+            self::$syncingInstallments = true;
+
+            try {
+                $venta->sincronizarCuotasCredito();
+            } finally {
+                self::$syncingInstallments = false;
+            }
+        });
     }
 
     public function scopeHoy($query)
@@ -111,6 +129,11 @@ class Venta extends Model
     public function detalles()
     {
         return $this->hasMany(VentaDetalle::class);
+    }
+
+    public function cuotas(): HasMany
+    {
+        return $this->hasMany(VentaCuota::class)->orderBy('numero_cuota');
     }
 
     public function facturaElectronica()
@@ -215,6 +238,15 @@ class Venta extends Model
         return MoraSupport::saleSummary($this);
     }
 
+    public function getProximaCuotaPendienteAttribute(): ?VentaCuota
+    {
+        $cuotas = $this->relationLoaded('cuotas')
+            ? $this->cuotas
+            : $this->cuotas()->get();
+
+        return $cuotas->first(fn (VentaCuota $cuota) => ! $cuota->esta_pagada);
+    }
+
     public function getResumenEquipoMoraAttribute(): string
     {
         $productos = $this->relationLoaded('detalles')
@@ -239,5 +271,10 @@ class Venta extends Model
         $this->monto_pagado = min((float) $this->total, (float) $this->moraAbonos()->sum('monto'));
         $this->estado = $this->saldo_pendiente_mora > 0 ? 'credito' : 'pagada';
         $this->save();
+    }
+
+    public function sincronizarCuotasCredito(): void
+    {
+        MoraSupport::syncSaleInstallments($this);
     }
 }

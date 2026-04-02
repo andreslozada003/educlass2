@@ -127,8 +127,11 @@
                             </p>
                             <p class="mt-1 font-medium text-slate-900">
                                 {{ $record->numero_cuotas ? $record->numero_cuotas . ' cuotas' : 'Sin cuotas registradas' }}
+                                @if($creditSummary && $creditSummary['installment_amount'] > 0)
+                                / {{ money($creditSummary['installment_amount']) }} por cuota
+                                @endif
                                 @if($record->plazo_acordado_dias)
-                                · {{ $record->plazo_acordado_dias }} dias
+                                / {{ $record->plazo_acordado_dias }} dias
                                 @endif
                             </p>
                         </div>
@@ -230,7 +233,7 @@
                     <div class="rounded-3xl border border-slate-200 bg-slate-50/80 p-4">
                         <div class="flex items-center justify-between">
                             <h3 class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $month['title'] }}</h3>
-                            <span class="text-xs text-slate-400">Semaforo automatico</span>
+                            <span class="text-xs text-slate-400">{{ $isVenta ? 'Cuotas y mora' : 'Semaforo automatico' }}</span>
                         </div>
                         <div class="mt-4 grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                             <span>Lun</span>
@@ -244,15 +247,37 @@
                         <div class="mt-3 grid grid-cols-7 gap-2">
                             @foreach($month['days'] as $day)
                                 @if($day['blank'])
-                                <div class="aspect-square rounded-2xl border border-dashed border-transparent"></div>
+                                <div class="min-h-[110px] rounded-2xl border border-dashed border-transparent"></div>
                                 @else
-                                <div class="aspect-square rounded-2xl border p-2 text-left {{ $day['palette']['calendar'] }} {{ $day['is_today'] ? 'ring-2 ring-slate-900/20' : '' }}">
-                                    <div class="flex items-center justify-between">
+                                @php($entries = collect($day['entries'] ?? []))
+                                @php($installmentEntries = $entries->where('entry_type', 'installment'))
+                                @php($metaEntries = $entries->reject(fn ($entry) => ($entry['entry_type'] ?? null) === 'installment'))
+                                <div class="min-h-[110px] rounded-2xl border p-2 text-left {{ $day['palette']['calendar'] }} {{ $day['is_today'] ? 'ring-2 ring-slate-900/20' : '' }}">
+                                    <div class="flex items-start justify-between gap-2">
                                         <span class="text-sm font-semibold">{{ $day['date']->day }}</span>
-                                        @if(!empty($day['marker']))
-                                        <span class="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{{ $day['marker']['label'] }}</span>
-                                        @endif
+                                        <div class="flex flex-wrap justify-end gap-1">
+                                            @foreach($metaEntries as $entry)
+                                            <span class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{{ $entry['label'] }}</span>
+                                            @endforeach
+                                        </div>
                                     </div>
+
+                                    @if($installmentEntries->isNotEmpty())
+                                    <div class="mt-2 space-y-2">
+                                        @foreach($installmentEntries as $entry)
+                                        <div class="rounded-xl border px-2 py-2 text-[11px] leading-4 {{ $entry['card_classes'] ?? 'border-slate-200 bg-white/80 text-slate-700' }}">
+                                            <p class="font-semibold">{{ $entry['client_name'] }}</p>
+                                            <p class="mt-1">Cuota {{ $entry['installment_number'] }} / {{ $entry['amount_label'] }}</p>
+                                            <div class="mt-1 flex items-center justify-between gap-2">
+                                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {{ $entry['badge_classes'] ?? 'bg-slate-100 text-slate-700 ring-slate-200' }}">{{ $entry['status_label'] }}</span>
+                                                @if(($entry['days_in_mora'] ?? 0) > 0)
+                                                <span class="text-[10px] font-semibold">+{{ $entry['days_in_mora'] }} dias</span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                        @endforeach
+                                    </div>
+                                    @endif
                                 </div>
                                 @endif
                             @endforeach
@@ -260,6 +285,58 @@
                     </div>
                     @endforeach
                 </div>
+
+                @if($isVenta && $creditSummary && $creditSummary['cuotas']->isNotEmpty())
+                <div class="mt-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-900">Plan de cuotas</h3>
+                            <p class="mt-1 text-sm text-slate-500">Cada pago se aplica primero a la cuota pendiente mas antigua y la mora se quita sola cuando la cuota queda cubierta.</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{{ $creditSummary['installments'] }} cuotas</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr class="text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    <th class="px-5 py-4">Cuota</th>
+                                    <th class="px-5 py-4">Vencimiento</th>
+                                    <th class="px-5 py-4">Valor</th>
+                                    <th class="px-5 py-4">Pagado</th>
+                                    <th class="px-5 py-4">Saldo</th>
+                                    <th class="px-5 py-4">Estado</th>
+                                    <th class="px-5 py-4">Dias mora</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach($creditSummary['cuotas'] as $cuota)
+                                <tr class="{{ $cuota->esta_en_mora ? 'bg-rose-50/60' : ($cuota->esta_pagada ? 'bg-emerald-50/40' : '') }}">
+                                    <td class="px-5 py-4">
+                                        <p class="font-semibold text-slate-900">Cuota {{ $cuota->numero_cuota }}</p>
+                                        @if($creditSummary['current_quota'] && $creditSummary['current_quota']->numero_cuota === $cuota->numero_cuota)
+                                        <p class="mt-1 text-xs font-semibold {{ $cuota->esta_en_mora ? 'text-rose-600' : 'text-primary-600' }}">Cuota actual</p>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-4 text-sm text-slate-700">{{ $cuota->fecha_vencimiento?->format('d/m/Y') ?: '-' }}</td>
+                                    <td class="px-5 py-4 text-sm font-semibold text-slate-900">{{ money($cuota->valor_cuota) }}</td>
+                                    <td class="px-5 py-4 text-sm text-emerald-700">
+                                        {{ money($cuota->monto_pagado) }}
+                                        @if($cuota->fecha_pago)
+                                        <p class="mt-1 text-xs text-slate-500">Pagada {{ $cuota->fecha_pago->format('d/m/Y') }}</p>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-4 text-sm font-semibold {{ $cuota->esta_en_mora ? 'text-rose-600' : 'text-slate-900' }}">{{ money($cuota->saldo_pendiente) }}</td>
+                                    <td class="px-5 py-4">
+                                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset {{ $cuota->estado_badge_classes }}">{{ $cuota->estado_etiqueta }}</span>
+                                    </td>
+                                    <td class="px-5 py-4 text-sm font-semibold {{ $cuota->esta_en_mora ? 'text-rose-600' : 'text-slate-500' }}">{{ $cuota->dias_mora_actual }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @endif
             </div>
 
             <div class="grid gap-6 lg:grid-cols-2">
