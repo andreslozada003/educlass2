@@ -19,7 +19,7 @@
         </a>
     </div>
 </div>
-@endsection
+@endsection      
 
 @section('content')
 <!-- Stats Cards -->
